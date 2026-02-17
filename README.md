@@ -71,8 +71,8 @@ The web server runs on `$PORT` and manages the nanobot gateway as a child proces
 
 ## Supported Providers
 
-Anthropic, OpenAI, OpenRouter, DeepSeek, Groq, Gemini, Zhipu, vLLM
+Anthropic, OpenAI, OpenRouter, DeepSeek, Groq, Zhipu, Dashscope, vLLM, Moonshot, MiniMax, AIHubMix
 
 ## Supported Channels
 
-Telegram, WhatsApp (via bridge), Feishu/Lark
+Telegram, WhatsApp (via bridge), Discord, Slack, QQ, Dingtalk, Email, Feishu/Lark, MoChat

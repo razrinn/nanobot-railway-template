@@ -6,7 +6,20 @@
   <title>nanobot</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind.config = { darkMode: 'class' };
+    tailwind.config = { 
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            gray: {
+              850: '#1f2937',
+              900: '#111827',
+              950: '#030712',
+            }
+          }
+        }
+      }
+    };
     if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
       document.documentElement.classList.add('dark');
     }
@@ -15,344 +28,694 @@
     });
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <style>
     [x-cloak] { display: none !important; }
-    .log-viewer { font-family: 'Menlo', 'Monaco', 'Courier New', monospace; font-size: 13px; line-height: 1.5; }
-    .log-viewer::-webkit-scrollbar { width: 6px; }
-    .log-viewer::-webkit-scrollbar-thumb { border-radius: 3px; }
-    .dark .log-viewer::-webkit-scrollbar-thumb { background: #4b5563; }
-    .log-viewer::-webkit-scrollbar-thumb { background: #d1d5db; }
+    .log-viewer { font-family: 'Menlo', 'Monaco', 'Courier New', monospace; font-size: 12px; line-height: 1.6; }
+    .log-viewer::-webkit-scrollbar { width: 8px; }
+    .log-viewer::-webkit-scrollbar-track { background: transparent; }
+    .dark .log-viewer::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+    .log-viewer::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 4px; }
+    .log-line { border-left: 2px solid transparent; padding-left: 8px; margin-left: -10px; }
+    .log-line:hover { border-left-color: #3b82f6; background: rgba(59, 130, 246, 0.05); }
+    .dark .log-line:hover { background: rgba(59, 130, 246, 0.1); }
+    .card { transition: all 0.2s ease; }
+    .card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .dark .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .nav-item { transition: all 0.15s ease; }
+    .nav-item:hover { transform: translateX(2px); }
+    input:focus, select:focus { transition: all 0.15s ease; }
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+    }
+    .running-indicator { animation: pulse-glow 2s infinite; }
   </style>
 </head>
-<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 min-h-screen" x-data="app()" x-init="init()" x-cloak>
+<body class="bg-gray-100 text-gray-900 dark:bg-gray-950 dark:text-gray-100 min-h-screen" x-data="app()" x-init="init()" x-cloak>
 
-  <div class="max-w-6xl mx-auto px-4 py-6">
-    <header class="flex items-center justify-between mb-8">
-      <div class="flex items-center gap-3">
-        <span class="text-2xl">🐈</span>
-        <h1 class="text-2xl font-bold tracking-tight">nanobot</h1>
-        <span class="text-xs px-2 py-0.5 rounded-full font-medium"
-              :class="status.gateway?.state === 'running' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : status.gateway?.state === 'error' ? 'bg-red-500/20 text-red-600 dark:text-red-400' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'"
-              x-text="status.gateway?.state || 'unknown'"></span>
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
+      <div class="p-5 border-b border-gray-200 dark:border-gray-800">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl">🐈</span>
+          <div>
+            <h1 class="text-lg font-bold tracking-tight">nanobot</h1>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="w-2 h-2 rounded-full"
+                    :class="status.gateway?.state === 'running' ? 'bg-emerald-500 running-indicator' : status.gateway?.state === 'error' ? 'bg-red-500' : 'bg-gray-400'"></span>
+              <span class="text-xs text-gray-500 dark:text-gray-400" x-text="status.gateway?.state || 'unknown'"></span>
+            </div>
+          </div>
+        </div>
       </div>
-      <button @click="restartGateway()" class="text-sm px-3 py-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-lg transition">
-        Restart Gateway
-      </button>
-    </header>
+      
+      <nav class="flex-1 p-4 space-y-1">
+        <button @click="tab = 'config'" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition"
+                :class="tab === 'config' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'">
+          <i class="fas fa-cog w-5 text-center"></i>
+          <span class="font-medium">Configuration</span>
+        </button>
+        <button @click="tab = 'status'" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition"
+                :class="tab === 'status' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'">
+          <i class="fas fa-chart-line w-5 text-center"></i>
+          <span class="font-medium">Status</span>
+        </button>
+        <button @click="tab = 'logs'" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition"
+                :class="tab === 'logs' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'">
+          <i class="fas fa-terminal w-5 text-center"></i>
+          <span class="font-medium">Logs</span>
+          <span class="ml-auto text-xs bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-full" x-text="logs.length"></span>
+        </button>
+      </nav>
 
-    <div class="flex gap-1 mb-6 border-b border-gray-200 dark:border-gray-800">
-      <button @click="tab = 'config'" class="px-4 py-2 text-sm font-medium rounded-t-lg transition"
-              :class="tab === 'config' ? 'bg-gray-200 text-gray-900 dark:bg-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'">Configuration</button>
-      <button @click="tab = 'status'" class="px-4 py-2 text-sm font-medium rounded-t-lg transition"
-              :class="tab === 'status' ? 'bg-gray-200 text-gray-900 dark:bg-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'">Status</button>
-    </div>
-
-    <div x-show="tab === 'config'">
-      <div class="space-y-6">
-
-        <section>
-          <h2 class="text-lg font-semibold mb-3">Providers</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <template x-for="p in providerList" :key="p.key">
-              <div class="bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-800 rounded-xl p-4">
-                <h3 class="font-medium mb-3 capitalize" x-text="p.label"></h3>
-                <div class="space-y-3">
-                  <div>
-                    <label class="block text-xs text-gray-500 mb-1">API Key</label>
-                    <input type="password" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                           :value="getProvider(p.key, 'apiKey')"
-                           @input="setProvider(p.key, 'apiKey', $event.target.value)"
-                           placeholder="Enter API key">
-                  </div>
-                  <div x-show="p.hasBase">
-                    <label class="block text-xs text-gray-500 mb-1">Base URL</label>
-                    <input type="text" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                           :value="getProvider(p.key, 'apiBase')"
-                           @input="setProvider(p.key, 'apiBase', $event.target.value)"
-                           :placeholder="p.basePlaceholder || 'Optional'">
-                  </div>
-                </div>
-              </div>
-            </template>
+      <div class="p-4 border-t border-gray-200 dark:border-gray-800">
+        <div class="flex items-center justify-between">
+          <div class="text-xs text-gray-500 dark:text-gray-400">
+            <div x-show="status.gateway?.uptime != null">
+              <i class="fas fa-clock mr-1"></i><span x-text="formatUptime(status.gateway?.uptime)"></span>
+            </div>
+            <div x-show="!status.gateway?.uptime">Not running</div>
           </div>
-        </section>
-
-        <section>
-          <h2 class="text-lg font-semibold mb-3">Agent Defaults</h2>
-          <div class="bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-800 rounded-xl p-4">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-xs text-gray-500 mb-1">Model</label>
-                <input type="text" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                       x-model="config.agents.defaults.model">
-              </div>
-              <div>
-                <label class="block text-xs text-gray-500 mb-1">Max Tokens</label>
-                <input type="number" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                       x-model.number="config.agents.defaults.maxTokens">
-              </div>
-              <div>
-                <label class="block text-xs text-gray-500 mb-1">Temperature</label>
-                <input type="number" step="0.1" min="0" max="2" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                       x-model.number="config.agents.defaults.temperature">
-              </div>
-              <div>
-                <label class="block text-xs text-gray-500 mb-1">Max Tool Iterations</label>
-                <input type="number" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                       x-model.number="config.agents.defaults.maxToolIterations">
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section>
-          <h2 class="text-lg font-semibold mb-3">Channels</h2>
-          <div class="space-y-4">
-
-            <div class="bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-800 rounded-xl p-4">
-              <div class="flex items-center justify-between mb-3">
-                <h3 class="font-medium">Telegram</h3>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" class="rounded bg-gray-100 border-gray-300 dark:bg-gray-800 dark:border-gray-600" x-model="config.channels.telegram.enabled">
-                  <span class="text-xs text-gray-500 dark:text-gray-400">Enabled</span>
-                </label>
-              </div>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-3" x-show="config.channels.telegram.enabled">
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Bot Token</label>
-                  <input type="password" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                         x-model="config.channels.telegram.token" placeholder="Token from @BotFather">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Allowed Users (comma-separated)</label>
-                  <input type="text" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                         :value="(config.channels.telegram.allowFrom || []).join(', ')"
-                         @input="config.channels.telegram.allowFrom = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)">
-                </div>
-              </div>
-            </div>
-
-            <div class="bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-800 rounded-xl p-4">
-              <div class="flex items-center justify-between mb-3">
-                <h3 class="font-medium">WhatsApp</h3>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" class="rounded bg-gray-100 border-gray-300 dark:bg-gray-800 dark:border-gray-600" x-model="config.channels.whatsapp.enabled">
-                  <span class="text-xs text-gray-500 dark:text-gray-400">Enabled</span>
-                </label>
-              </div>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-3" x-show="config.channels.whatsapp.enabled">
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Bridge URL</label>
-                  <input type="text" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                         x-model="config.channels.whatsapp.bridgeUrl" placeholder="ws://localhost:3001">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Allowed Numbers (comma-separated)</label>
-                  <input type="text" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                         :value="(config.channels.whatsapp.allowFrom || []).join(', ')"
-                         @input="config.channels.whatsapp.allowFrom = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)">
-                </div>
-              </div>
-            </div>
-
-            <div class="bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-800 rounded-xl p-4">
-              <div class="flex items-center justify-between mb-3">
-                <h3 class="font-medium">Feishu</h3>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" class="rounded bg-gray-100 border-gray-300 dark:bg-gray-800 dark:border-gray-600" x-model="config.channels.feishu.enabled">
-                  <span class="text-xs text-gray-500 dark:text-gray-400">Enabled</span>
-                </label>
-              </div>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-3" x-show="config.channels.feishu.enabled">
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">App ID</label>
-                  <input type="text" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                         x-model="config.channels.feishu.appId">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">App Secret</label>
-                  <input type="password" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                         x-model="config.channels.feishu.appSecret">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Encrypt Key</label>
-                  <input type="password" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                         x-model="config.channels.feishu.encryptKey">
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Verification Token</label>
-                  <input type="password" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                         x-model="config.channels.feishu.verificationToken">
-                </div>
-                <div class="md:col-span-2">
-                  <label class="block text-xs text-gray-500 mb-1">Allowed Users (comma-separated)</label>
-                  <input type="text" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                         :value="(config.channels.feishu.allowFrom || []).join(', ')"
-                         @input="config.channels.feishu.allowFrom = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)">
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section>
-          <h2 class="text-lg font-semibold mb-3">Tools</h2>
-          <div class="bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-800 rounded-xl p-4">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-xs text-gray-500 mb-1">Brave Search API Key</label>
-                <input type="password" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                       x-model="config.tools.web.search.apiKey" placeholder="Enter Brave Search API key">
-              </div>
-              <div>
-                <label class="block text-xs text-gray-500 mb-1">Exec Timeout (seconds)</label>
-                <input type="number" class="w-full bg-gray-100 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                       x-model.number="config.tools.exec.timeout">
-              </div>
-              <div class="flex items-center gap-2">
-                <input type="checkbox" class="rounded bg-gray-100 border-gray-300 dark:bg-gray-800 dark:border-gray-600" x-model="config.tools.exec.restrictToWorkspace">
-                <label class="text-sm text-gray-500 dark:text-gray-400">Restrict exec to workspace</label>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <div class="flex items-center justify-between bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-800 rounded-xl p-4">
-          <label class="flex items-center gap-2">
-            <input type="checkbox" class="rounded bg-gray-100 border-gray-300 dark:bg-gray-800 dark:border-gray-600" x-model="restartAfterSave">
-            <span class="text-sm text-gray-500 dark:text-gray-400">Restart gateway after save</span>
-          </label>
-          <button @click="saveConfig()" :disabled="saving"
-                  class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 rounded-lg text-sm font-medium transition">
-            <span x-show="!saving">Save Configuration</span>
-            <span x-show="saving">Saving...</span>
+          <button @click="restartGateway()" class="text-xs px-3 py-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-lg transition" title="Restart Gateway">
+            <i class="fas fa-redo"></i>
           </button>
         </div>
       </div>
-    </div>
+    </aside>
 
-    <div x-show="tab === 'status'">
-      <div class="space-y-6">
+    <!-- Main Content -->
+    <main class="flex-1 overflow-y-auto">
+      <div class="max-w-5xl mx-auto p-6">
 
-        <section>
-          <h2 class="text-lg font-semibold mb-3">Gateway</h2>
-          <div class="bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-800 rounded-xl p-4">
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex items-center gap-4">
-                <div>
-                  <span class="text-xs text-gray-500">State</span>
-                  <p class="font-medium" :class="{
+        <!-- Configuration Tab -->
+        <div x-show="tab === 'config'" x-transition.opacity>
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl font-bold">Configuration</h2>
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 cursor-pointer">
+                <input type="checkbox" class="rounded bg-gray-100 border-gray-300 dark:bg-gray-800 dark:border-gray-600 text-blue-600 focus:ring-blue-500" x-model="restartAfterSave">
+                <span>Restart after save</span>
+              </label>
+              <button @click="saveConfig()" :disabled="saving" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-sm font-medium transition shadow-lg shadow-blue-600/20">
+                <span x-show="!saving"><i class="fas fa-save mr-2"></i>Save</span>
+                <span x-show="saving"><i class="fas fa-spinner fa-spin mr-2"></i>Saving...</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-6">
+            <!-- Providers Section -->
+            <section>
+              <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <i class="fas fa-cloud text-blue-500"></i>
+                Providers
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <template x-for="p in providerList" :key="p.key">
+                  <div class="card bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5">
+                    <div class="flex items-center justify-between mb-4">
+                      <h4 class="font-semibold capitalize" x-text="p.label"></h4>
+                      <span class="text-xs px-2 py-1 rounded-full"
+                            :class="getProvider(p.key, 'apiKey') ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'">
+                        <span x-text="getProvider(p.key, 'apiKey') ? 'Set' : 'Not set'"></span>
+                      </span>
+                    </div>
+                    <div class="space-y-3">
+                      <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">API Key</label>
+                        <input type="password" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                               :value="getProvider(p.key, 'apiKey')"
+                               @input="setProvider(p.key, 'apiKey', $event.target.value)"
+                               :placeholder="'Enter ' + p.label + ' key'">
+                      </div>
+                      <div x-show="p.hasBase">
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Base URL</label>
+                        <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                               :value="getProvider(p.key, 'apiBase')"
+                               @input="setProvider(p.key, 'apiBase', $event.target.value)"
+                               :placeholder="p.basePlaceholder || 'Optional'">
+                      </div>
+                      <div x-show="p.hasExtraHeaders">
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Extra Headers (JSON)</label>
+                        <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition font-mono"
+                               :value="getProvider(p.key, 'extraHeaders')"
+                               @input="setProvider(p.key, 'extraHeaders', $event.target.value)"
+                               placeholder='{"Authorization": "Bearer ..."}'>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </section>
+
+            <!-- Agent Defaults Section -->
+            <section>
+              <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <i class="fas fa-robot text-purple-500"></i>
+                Agent Defaults
+              </h3>
+              <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
+                  <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Model</label>
+                    <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                           x-model="config.agents.defaults.model">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Max Tokens</label>
+                    <input type="number" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                           x-model.number="config.agents.defaults.maxTokens">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Temperature</label>
+                    <input type="number" step="0.1" min="0" max="2" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                           x-model.number="config.agents.defaults.temperature">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Max Tool Iterations</label>
+                    <input type="number" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                           x-model.number="config.agents.defaults.maxToolIterations">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Memory Window</label>
+                    <input type="number" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                           x-model.number="config.agents.defaults.memoryWindow">
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Channels Section -->
+            <section>
+              <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <i class="fas fa-comments text-green-500"></i>
+                Channels
+              </h3>
+              <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                
+                <!-- Telegram -->
+                <div class="card bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5">
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                      <i class="fab fa-telegram text-blue-400 text-xl"></i>
+                      <h4 class="font-semibold">Telegram</h4>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" class="sr-only peer" x-model="config.channels.telegram.enabled">
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <div class="space-y-3" x-show="config.channels.telegram.enabled" x-collapse>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Bot Token</label>
+                      <input type="password" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.telegram.token" placeholder="Token from @BotFather">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Allowed Users</label>
+                      <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             :value="(config.channels.telegram.allowFrom || []).join(', ')"
+                             @input="config.channels.telegram.allowFrom = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
+                             placeholder="Comma-separated">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- WhatsApp -->
+                <div class="card bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5">
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                      <i class="fab fa-whatsapp text-green-400 text-xl"></i>
+                      <h4 class="font-semibold">WhatsApp</h4>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" class="sr-only peer" x-model="config.channels.whatsapp.enabled">
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <div class="space-y-3" x-show="config.channels.whatsapp.enabled" x-collapse>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Bridge URL</label>
+                      <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.whatsapp.bridgeUrl" placeholder="ws://localhost:3001">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Bridge Token</label>
+                      <input type="password" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.whatsapp.bridgeToken" placeholder="Bridge token">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Allowed Numbers</label>
+                      <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             :value="(config.channels.whatsapp.allowFrom || []).join(', ')"
+                             @input="config.channels.whatsapp.allowFrom = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
+                             placeholder="Comma-separated">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Feishu -->
+                <div class="card bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5">
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                      <i class="fas fa-bird text-red-400 text-xl"></i>
+                      <h4 class="font-semibold">Feishu</h4>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" class="sr-only peer" x-model="config.channels.feishu.enabled">
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <div class="space-y-3" x-show="config.channels.feishu.enabled" x-collapse>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">App ID</label>
+                      <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.feishu.appId">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">App Secret</label>
+                      <input type="password" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.feishu.appSecret">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Encrypt Key</label>
+                      <input type="password" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.feishu.encryptKey">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Verification Token</label>
+                      <input type="password" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.feishu.verificationToken">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Allowed Users</label>
+                      <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             :value="(config.channels.feishu.allowFrom || []).join(', ')"
+                             @input="config.channels.feishu.allowFrom = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
+                             placeholder="Comma-separated">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Discord -->
+                <div class="card bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5">
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                      <i class="fab fa-discord text-indigo-400 text-xl"></i>
+                      <h4 class="font-semibold">Discord</h4>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" class="sr-only peer" x-model="config.channels.discord.enabled">
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <div class="space-y-3" x-show="config.channels.discord.enabled" x-collapse>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Bot Token</label>
+                      <input type="password" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.discord.token" placeholder="Discord bot token">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Allowed Users</label>
+                      <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             :value="(config.channels.discord.allowFrom || []).join(', ')"
+                             @input="config.channels.discord.allowFrom = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
+                             placeholder="Comma-separated">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Slack -->
+                <div class="card bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5">
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                      <i class="fab fa-slack text-pink-400 text-xl"></i>
+                      <h4 class="font-semibold">Slack</h4>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" class="sr-only peer" x-model="config.channels.slack.enabled">
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <div class="space-y-3" x-show="config.channels.slack.enabled" x-collapse>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Mode</label>
+                      <select class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                              x-model="config.channels.slack.mode">
+                        <option value="socket">Socket Mode</option>
+                        <option value="http">HTTP</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Bot Token</label>
+                      <input type="password" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.slack.botToken" placeholder="xoxb-...">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">App Token</label>
+                      <input type="password" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.slack.appToken" placeholder="xapp-...">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- QQ -->
+                <div class="card bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5">
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                      <i class="fas fa-paw text-blue-400 text-xl"></i>
+                      <h4 class="font-semibold">QQ</h4>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" class="sr-only peer" x-model="config.channels.qq.enabled">
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <div class="space-y-3" x-show="config.channels.qq.enabled" x-collapse>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">App ID</label>
+                      <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.qq.appId">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Secret</label>
+                      <input type="password" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.qq.secret">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Allowed Users</label>
+                      <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             :value="(config.channels.qq.allowFrom || []).join(', ')"
+                             @input="config.channels.qq.allowFrom = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
+                             placeholder="Comma-separated">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Dingtalk -->
+                <div class="card bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5">
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                      <i class="fas fa-bell text-blue-400 text-xl"></i>
+                      <h4 class="font-semibold">Dingtalk</h4>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" class="sr-only peer" x-model="config.channels.dingtalk.enabled">
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <div class="space-y-3" x-show="config.channels.dingtalk.enabled" x-collapse>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Client ID</label>
+                      <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.dingtalk.clientId">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Client Secret</label>
+                      <input type="password" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.dingtalk.clientSecret">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Allowed Users</label>
+                      <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             :value="(config.channels.dingtalk.allowFrom || []).join(', ')"
+                             @input="config.channels.dingtalk.allowFrom = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
+                             placeholder="Comma-separated">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Email -->
+                <div class="card bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5">
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                      <i class="fas fa-envelope text-gray-400 text-xl"></i>
+                      <h4 class="font-semibold">Email</h4>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" class="sr-only peer" x-model="config.channels.email.enabled">
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <div class="space-y-3" x-show="config.channels.email.enabled" x-collapse>
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">IMAP Host</label>
+                        <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                               x-model="config.channels.email.imapHost" placeholder="imap.example.com">
+                      </div>
+                      <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">IMAP Port</label>
+                        <input type="number" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                               x-model.number="config.channels.email.imapPort">
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">IMAP Username</label>
+                        <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                               x-model="config.channels.email.imapUsername">
+                      </div>
+                      <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">IMAP Password</label>
+                        <input type="password" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                               x-model="config.channels.email.imapPassword">
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">SMTP Host</label>
+                        <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                               x-model="config.channels.email.smtpHost" placeholder="smtp.example.com">
+                      </div>
+                      <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">SMTP Port</label>
+                        <input type="number" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                               x-model.number="config.channels.email.smtpPort">
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">SMTP Username</label>
+                        <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                               x-model="config.channels.email.smtpUsername">
+                      </div>
+                      <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">SMTP Password</label>
+                        <input type="password" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                               x-model="config.channels.email.smtpPassword">
+                      </div>
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">From Address</label>
+                      <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             x-model="config.channels.email.fromAddress" placeholder="bot@example.com">
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Allowed Senders</label>
+                      <input type="text" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                             :value="(config.channels.email.allowFrom || []).join(', ')"
+                             @input="config.channels.email.allowFrom = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
+                             placeholder="Comma-separated">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Tools Section -->
+            <section>
+              <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <i class="fas fa-tools text-orange-500"></i>
+                Tools
+              </h3>
+              <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                  <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Brave Search API Key</label>
+                    <input type="password" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                           x-model="config.tools.web.search.apiKey" placeholder="Enter API key">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Search Max Results</label>
+                    <input type="number" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                           x-model.number="config.tools.web.search.maxResults">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Exec Timeout (s)</label>
+                    <input type="number" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                           x-model.number="config.tools.exec.timeout">
+                  </div>
+                  <div class="flex items-center">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                      <input type="checkbox" class="rounded bg-gray-100 border-gray-300 dark:bg-gray-800 dark:border-gray-600 text-blue-600 focus:ring-blue-500" x-model="config.restrictToWorkspace">
+                      <span class="text-sm text-gray-600 dark:text-gray-400">Restrict to workspace</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- Status Tab -->
+        <div x-show="tab === 'status'" x-transition.opacity>
+          <h2 class="text-xl font-bold mb-6">System Status</h2>
+
+          <div class="space-y-6">
+            <!-- Gateway Status Card -->
+            <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6">
+              <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                  <div class="w-12 h-12 rounded-2xl flex items-center justify-center"
+                       :class="status.gateway?.state === 'running' ? 'bg-emerald-100 dark:bg-emerald-500/20' : status.gateway?.state === 'error' ? 'bg-red-100 dark:bg-red-500/20' : 'bg-gray-100 dark:bg-gray-800'">
+                    <i class="fas fa-server text-xl"
+                       :class="status.gateway?.state === 'running' ? 'text-emerald-600 dark:text-emerald-400' : status.gateway?.state === 'error' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-lg font-semibold">Gateway</h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 capitalize" x-text="status.gateway?.state || 'unknown'"></p>
+                  </div>
+                </div>
+                <div class="flex gap-2">
+                  <button @click="startGateway()" class="px-4 py-2 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/30 rounded-xl text-sm font-medium transition"
+                          :disabled="status.gateway?.state === 'running'">
+                    <i class="fas fa-play mr-1.5"></i>Start
+                  </button>
+                  <button @click="stopGateway()" class="px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30 rounded-xl text-sm font-medium transition"
+                          :disabled="status.gateway?.state === 'stopped'">
+                    <i class="fas fa-stop mr-1.5"></i>Stop
+                  </button>
+                  <button @click="restartGateway()" class="px-4 py-2 bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30 rounded-xl text-sm font-medium transition">
+                    <i class="fas fa-redo mr-1.5"></i>Restart
+                  </button>
+                </div>
+              </div>
+              
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">State</div>
+                  <div class="font-semibold capitalize" :class="{
                     'text-emerald-600 dark:text-emerald-400': status.gateway?.state === 'running',
                     'text-red-600 dark:text-red-400': status.gateway?.state === 'error',
                     'text-yellow-600 dark:text-yellow-400': status.gateway?.state === 'starting' || status.gateway?.state === 'stopping',
                     'text-gray-500 dark:text-gray-400': status.gateway?.state === 'stopped'
-                  }" x-text="status.gateway?.state || 'unknown'"></p>
+                  }" x-text="status.gateway?.state || 'unknown'"></div>
                 </div>
-                <div x-show="status.gateway?.pid">
-                  <span class="text-xs text-gray-500">PID</span>
-                  <p class="font-medium" x-text="status.gateway?.pid"></p>
+                <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">PID</div>
+                  <div class="font-semibold" x-text="status.gateway?.pid || '-'"></div>
                 </div>
-                <div x-show="status.gateway?.uptime != null">
-                  <span class="text-xs text-gray-500">Uptime</span>
-                  <p class="font-medium" x-text="formatUptime(status.gateway?.uptime)"></p>
+                <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Uptime</div>
+                  <div class="font-semibold" x-text="formatUptime(status.gateway?.uptime) || '-'"></div>
                 </div>
-                <div>
-                  <span class="text-xs text-gray-500">Restarts</span>
-                  <p class="font-medium" x-text="status.gateway?.restart_count ?? 0"></p>
+                <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Restarts</div>
+                  <div class="font-semibold" x-text="status.gateway?.restart_count ?? 0"></div>
                 </div>
               </div>
-              <div class="flex gap-2">
-                <button @click="startGateway()" class="text-xs px-3 py-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-600/20 dark:text-emerald-400 dark:hover:bg-emerald-600/30 rounded-lg transition"
-                        :disabled="status.gateway?.state === 'running'">Start</button>
-                <button @click="stopGateway()" class="text-xs px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-600/20 dark:text-red-400 dark:hover:bg-red-600/30 rounded-lg transition"
-                        :disabled="status.gateway?.state === 'stopped'">Stop</button>
-                <button @click="restartGateway()" class="text-xs px-3 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-600/20 dark:text-blue-400 dark:hover:bg-blue-600/30 rounded-lg transition">Restart</button>
+            </div>
+
+            <!-- Providers & Channels Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- Providers -->
+              <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
+                  <h3 class="font-semibold flex items-center gap-2">
+                    <i class="fas fa-cloud text-blue-500"></i>
+                    Providers
+                  </h3>
+                </div>
+                <div class="divide-y divide-gray-200 dark:divide-gray-800">
+                  <template x-for="(info, name) in (status.providers || {})" :key="name">
+                    <div class="px-6 py-3 flex items-center justify-between">
+                      <span class="capitalize font-medium" x-text="name"></span>
+                      <span class="text-xs px-3 py-1 rounded-full font-medium"
+                            :class="info.configured ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'">
+                        <span x-text="info.configured ? 'Configured' : 'Not configured'"></span>
+                      </span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Channels -->
+              <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
+                  <h3 class="font-semibold flex items-center gap-2">
+                    <i class="fas fa-comments text-green-500"></i>
+                    Channels
+                  </h3>
+                </div>
+                <div class="divide-y divide-gray-200 dark:divide-gray-800">
+                  <template x-for="(info, name) in (status.channels || {})" :key="name">
+                    <div class="px-6 py-3 flex items-center justify-between">
+                      <span class="capitalize font-medium" x-text="name"></span>
+                      <span class="text-xs px-3 py-1 rounded-full font-medium"
+                            :class="info.enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'">
+                        <span x-text="info.enabled ? 'Enabled' : 'Disabled'"></span>
+                      </span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <!-- Cron Jobs -->
+            <div x-show="(status.cron?.count || 0) > 0" class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+              <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
+                <h3 class="font-semibold flex items-center gap-2">
+                  <i class="fas fa-clock text-purple-500"></i>
+                  Cron Jobs <span class="text-sm text-gray-500" x-text="'(' + (status.cron?.count || 0) + ')'"></span>
+                </h3>
+              </div>
+              <div class="p-4">
+                <template x-for="(job, i) in (status.cron?.jobs || [])" :key="i">
+                  <div class="text-sm py-2 text-gray-600 dark:text-gray-400 font-mono" x-text="JSON.stringify(job, null, 2)"></div>
+                </template>
               </div>
             </div>
           </div>
-        </section>
+        </div>
 
-        <section>
-          <h2 class="text-lg font-semibold mb-3">Providers</h2>
-          <div class="bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-800 rounded-xl overflow-hidden">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-100/50 dark:bg-gray-800/50">
-                <tr>
-                  <th class="text-left px-4 py-2 text-xs text-gray-500 font-medium">Provider</th>
-                  <th class="text-left px-4 py-2 text-xs text-gray-500 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <template x-for="(info, name) in (status.providers || {})" :key="name">
-                  <tr class="border-t border-gray-200 dark:border-gray-800">
-                    <td class="px-4 py-2 capitalize" x-text="name"></td>
-                    <td class="px-4 py-2">
-                      <span class="text-xs px-2 py-0.5 rounded-full"
-                            :class="info.configured ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-500'"
-                            x-text="info.configured ? 'Configured' : 'Not configured'"></span>
-                    </td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
+        <!-- Logs Tab -->
+        <div x-show="tab === 'logs'" x-transition.opacity>
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl font-bold">Gateway Logs</h2>
+            <div class="flex items-center gap-3">
+              <span class="text-sm text-gray-500 dark:text-gray-400"><span x-text="logs.length"></span> lines</span>
+              <button @click="loadLogs()" class="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-lg text-sm transition">
+                <i class="fas fa-sync-alt"></i>
+              </button>
+            </div>
           </div>
-        </section>
+          
+          <div class="bg-gray-900 rounded-2xl overflow-hidden">
+            <div class="log-viewer h-[calc(100vh-180px)] overflow-y-auto p-4" x-ref="logViewer">
+              <template x-for="(line, i) in logs" :key="i">
+                <div class="log-line text-gray-300 font-mono text-xs py-0.5" x-text="line"></div>
+              </template>
+              <div x-show="logs.length === 0" class="text-gray-500 text-center py-8">
+                <i class="fas fa-terminal text-3xl mb-3"></i>
+                <div>No logs yet</div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-        <section>
-          <h2 class="text-lg font-semibold mb-3">Channels</h2>
-          <div class="bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-800 rounded-xl overflow-hidden">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-100/50 dark:bg-gray-800/50">
-                <tr>
-                  <th class="text-left px-4 py-2 text-xs text-gray-500 font-medium">Channel</th>
-                  <th class="text-left px-4 py-2 text-xs text-gray-500 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <template x-for="(info, name) in (status.channels || {})" :key="name">
-                  <tr class="border-t border-gray-200 dark:border-gray-800">
-                    <td class="px-4 py-2 capitalize" x-text="name"></td>
-                    <td class="px-4 py-2">
-                      <span class="text-xs px-2 py-0.5 rounded-full"
-                            :class="info.enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-500'"
-                            x-text="info.enabled ? 'Enabled' : 'Disabled'"></span>
-                    </td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section x-show="(status.cron?.count || 0) > 0">
-          <h2 class="text-lg font-semibold mb-3">Cron Jobs <span class="text-sm text-gray-500" x-text="'(' + (status.cron?.count || 0) + ')'"></span></h2>
-          <div class="bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-800 rounded-xl p-4">
-            <template x-for="(job, i) in (status.cron?.jobs || [])" :key="i">
-              <div class="text-sm py-1 text-gray-500 dark:text-gray-400" x-text="JSON.stringify(job)"></div>
-            </template>
-          </div>
-        </section>
-
-        <section>
-          <div class="flex items-center justify-between mb-3">
-            <h2 class="text-lg font-semibold">Recent Logs</h2>
-            <span class="text-xs text-gray-500" x-text="logs.length + ' lines'"></span>
-          </div>
-          <div class="bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-800 rounded-xl p-4 log-viewer h-96 overflow-y-auto" x-ref="logViewer">
-            <template x-for="(line, i) in logs" :key="i">
-              <div class="text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-all" x-text="line"></div>
-            </template>
-            <div x-show="logs.length === 0" class="text-gray-400 dark:text-gray-600 text-sm">No logs yet</div>
-          </div>
-        </section>
       </div>
-    </div>
+    </main>
+  </div>
 
-    <div x-show="toast.show" x-transition
-         class="fixed bottom-6 right-6 px-4 py-3 rounded-xl text-sm font-medium text-white shadow-lg"
-         :class="toast.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'">
-      <span x-text="toast.message"></span>
-    </div>
+  <!-- Toast Notification -->
+  <div x-show="toast.show" x-transition
+       class="fixed bottom-6 right-6 px-5 py-3.5 rounded-xl text-sm font-medium text-white shadow-xl"
+       :class="toast.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'">
+    <i class="fas" :class="toast.type === 'error' ? 'fa-exclamation-circle mr-2' : 'fa-check-circle mr-2'"></i>
+    <span x-text="toast.message"></span>
   </div>
 
   <script>
@@ -367,14 +730,17 @@
         toast: { show: false, message: '', type: 'success' },
 
         providerList: [
-          { key: 'anthropic', label: 'Anthropic', hasBase: false },
-          { key: 'openai', label: 'OpenAI', hasBase: true, basePlaceholder: 'https://api.openai.com/v1' },
-          { key: 'openrouter', label: 'OpenRouter', hasBase: true, basePlaceholder: 'https://openrouter.ai/api/v1' },
-          { key: 'deepseek', label: 'DeepSeek', hasBase: false },
-          { key: 'groq', label: 'Groq', hasBase: false },
-          { key: 'gemini', label: 'Gemini', hasBase: false },
-          { key: 'zhipu', label: 'Zhipu', hasBase: true },
-          { key: 'vllm', label: 'vLLM', hasBase: true, basePlaceholder: 'http://localhost:8000/v1' },
+          { key: 'anthropic', label: 'Anthropic', hasBase: false, hasExtraHeaders: true },
+          { key: 'openai', label: 'OpenAI', hasBase: true, basePlaceholder: 'https://api.openai.com/v1', hasExtraHeaders: true },
+          { key: 'openrouter', label: 'OpenRouter', hasBase: true, basePlaceholder: 'https://openrouter.ai/api/v1', hasExtraHeaders: true },
+          { key: 'deepseek', label: 'DeepSeek', hasBase: false, hasExtraHeaders: true },
+          { key: 'groq', label: 'Groq', hasBase: false, hasExtraHeaders: true },
+          { key: 'zhipu', label: 'Zhipu', hasBase: true, hasExtraHeaders: true },
+          { key: 'dashscope', label: 'Dashscope', hasBase: true, basePlaceholder: 'https://dashscope.aliyuncs.com/api/v1', hasExtraHeaders: true },
+          { key: 'vllm', label: 'vLLM', hasBase: true, basePlaceholder: 'http://localhost:8000/v1', hasExtraHeaders: true },
+          { key: 'moonshot', label: 'Moonshot', hasBase: true, basePlaceholder: 'https://api.moonshot.cn/v1', hasExtraHeaders: true },
+          { key: 'minimax', label: 'MiniMax', hasBase: true, basePlaceholder: 'https://api.minimax.chat/v1', hasExtraHeaders: true },
+          { key: 'aihubmix', label: 'AIHubMix', hasBase: true, basePlaceholder: 'https://aihubmix.com/v1', hasExtraHeaders: true },
         ],
 
         getProvider(key, field) {
@@ -414,7 +780,7 @@
               body: JSON.stringify(payload),
             });
             if (res.ok) {
-              this.showToast('Configuration saved', 'success');
+              this.showToast('Configuration saved successfully', 'success');
               await this.loadConfig();
             } else {
               try {
@@ -492,24 +858,33 @@
 
     function defaultConfig() {
       return {
-        agents: { defaults: { workspace: '~/.nanobot/workspace', model: 'anthropic/claude-opus-4-5', maxTokens: 8192, temperature: 0.7, maxToolIterations: 20 } },
+        agents: { defaults: { workspace: '~/.nanobot/workspace', model: 'anthropic/claude-opus-4-5', maxTokens: 8192, temperature: 0.7, maxToolIterations: 20, memoryWindow: 50 } },
         channels: {
           telegram: { enabled: false, token: '', allowFrom: [], proxy: null },
-          whatsapp: { enabled: false, bridgeUrl: 'ws://localhost:3001', allowFrom: [] },
+          whatsapp: { enabled: false, bridgeUrl: 'ws://localhost:3001', bridgeToken: '', allowFrom: [] },
+          discord: { enabled: false, token: '', allowFrom: [], gatewayUrl: 'wss://gateway.discord.gg/?v=10&encoding=json', intents: 37377 },
           feishu: { enabled: false, appId: '', appSecret: '', encryptKey: '', verificationToken: '', allowFrom: [] },
+          mochat: { enabled: false, baseUrl: 'https://mochat.io', socketUrl: '', socketPath: '/socket.io', socketDisableMsgpack: false, socketReconnectDelayMs: 1000, socketMaxReconnectDelayMs: 10000, socketConnectTimeoutMs: 10000, refreshIntervalMs: 30000, watchTimeoutMs: 25000, watchLimit: 100, retryDelayMs: 500, maxRetryAttempts: 0, clawToken: '', agentUserId: '', sessions: [], panels: [], allowFrom: [], mention: { requireInGroups: false }, groups: {}, replyDelayMode: 'non-mention', replyDelayMs: 120000 },
+          dingtalk: { enabled: false, clientId: '', clientSecret: '', allowFrom: [] },
+          email: { enabled: false, consentGranted: false, imapHost: '', imapPort: 993, imapUsername: '', imapPassword: '', imapMailbox: 'INBOX', imapUseSsl: true, smtpHost: '', smtpPort: 587, smtpUsername: '', smtpPassword: '', smtpUseTls: true, smtpUseSsl: false, fromAddress: '', autoReplyEnabled: true, pollIntervalSeconds: 30, markSeen: true, maxBodyChars: 12000, subjectPrefix: 'Re: ', allowFrom: [] },
+          slack: { enabled: false, mode: 'socket', webhookPath: '/slack/events', botToken: '', appToken: '', userTokenReadOnly: true, groupPolicy: 'mention', groupAllowFrom: [], dm: { enabled: true, policy: 'open', allowFrom: [] } },
+          qq: { enabled: false, appId: '', secret: '', allowFrom: [] },
         },
         providers: {
-          anthropic: { apiKey: '', apiBase: null },
-          openai: { apiKey: '', apiBase: null },
-          openrouter: { apiKey: '', apiBase: null },
-          deepseek: { apiKey: '', apiBase: null },
-          groq: { apiKey: '', apiBase: null },
-          gemini: { apiKey: '', apiBase: null },
-          zhipu: { apiKey: '', apiBase: null },
-          vllm: { apiKey: '', apiBase: null },
+          anthropic: { apiKey: '', apiBase: null, extraHeaders: null },
+          openai: { apiKey: '', apiBase: null, extraHeaders: null },
+          openrouter: { apiKey: '', apiBase: null, extraHeaders: null },
+          deepseek: { apiKey: '', apiBase: null, extraHeaders: null },
+          groq: { apiKey: '', apiBase: null, extraHeaders: null },
+          zhipu: { apiKey: '', apiBase: null, extraHeaders: null },
+          dashscope: { apiKey: '', apiBase: null, extraHeaders: null },
+          vllm: { apiKey: '', apiBase: null, extraHeaders: null },
+          moonshot: { apiKey: '', apiBase: null, extraHeaders: null },
+          minimax: { apiKey: '', apiBase: null, extraHeaders: null },
+          aihubmix: { apiKey: '', apiBase: null, extraHeaders: null },
         },
         gateway: { host: '0.0.0.0', port: 18790 },
-        tools: { web: { search: { apiKey: '', maxResults: 5 } }, exec: { timeout: 60, restrictToWorkspace: false } },
+        tools: { web: { search: { apiKey: '', maxResults: 5 } }, exec: { timeout: 60 }, restrictToWorkspace: false },
       };
     }
 
